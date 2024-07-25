@@ -1,0 +1,15 @@
+# conda env create -f environment.yml
+
+name: image_text_extract
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - pillow=9.4.*
+  - pytesseract=0.3.*
+  - tesseract=5.2.*
+  - leptonica
+  - pip:
+    - opencv-python-headless==4.7.*
