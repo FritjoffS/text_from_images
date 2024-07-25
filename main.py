@@ -6,6 +6,8 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 import pytesseract
 from pytesseract import TesseractError
 import subprocess
+from pdf2image import convert_from_path
+import tempfile
 
 def check_tesseract_installed():
     try:
@@ -14,14 +16,10 @@ def check_tesseract_installed():
     except FileNotFoundError:
         return False
 
-def extract_text_from_image(image_path, lang='eng'):
+def extract_text_from_image(image, lang='eng'):
     try:
-        with Image.open(image_path) as img:
-            text = pytesseract.image_to_string(img, lang=lang)
-            return text.strip()
-    except IOError as e:
-        messagebox.showerror("Error", f"Error opening image file: {e}")
-        return None
+        text = pytesseract.image_to_string(image, lang=lang)
+        return text.strip()
     except TesseractError as e:
         messagebox.showerror("Error", f"Tesseract error: {e}")
         return None
@@ -29,15 +27,40 @@ def extract_text_from_image(image_path, lang='eng'):
         messagebox.showerror("Error", f"An unexpected error occurred: {e}")
         return None
 
-def process_images_in_directory(directory, lang='eng'):
+def process_pdf(pdf_path, lang='eng'):
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pages = convert_from_path(pdf_path, output_folder=temp_dir)
+            text = ""
+            for i, page in enumerate(pages):
+                page_text = extract_text_from_image(page, lang)
+                if page_text:
+                    text += f"Page {i+1}:\n{page_text}\n\n{'='*50}\n\n"
+        return text
+    except Exception as e:
+        messagebox.showerror("Error", f"Error processing PDF: {e}")
+        return None
+
+def process_file(file_path, lang='eng'):
+    if file_path.lower().endswith('.pdf'):
+        return process_pdf(file_path, lang)
+    else:
+        try:
+            with Image.open(file_path) as img:
+                return extract_text_from_image(img, lang)
+        except IOError as e:
+            messagebox.showerror("Error", f"Error opening image file: {e}")
+            return None
+
+def process_files_in_directory(directory, lang='eng'):
     results = {}
-    supported_formats = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff')
+    supported_formats = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.pdf')
 
     try:
         for filename in os.listdir(directory):
             if filename.lower().endswith(supported_formats):
                 file_path = os.path.join(directory, filename)
-                text = extract_text_from_image(file_path, lang)
+                text = process_file(file_path, lang)
                 if text:
                     results[filename] = text
                 else:
@@ -54,7 +77,7 @@ def process_images_in_directory(directory, lang='eng'):
 class ImageTextExtractorGUI:
     def __init__(self, master):
         self.master = master
-        master.title("Image Text Extractor")
+        master.title("Image and PDF Text Extractor")
         master.geometry("500x350")
 
         self.is_dark_mode = tk.BooleanVar(value=False)
@@ -63,7 +86,7 @@ class ImageTextExtractorGUI:
         self.apply_theme()
 
     def create_widgets(self):
-        self.label_dir = ttk.Label(self.master, text="Select Directory Containing Images:")
+        self.label_dir = ttk.Label(self.master, text="Select Directory Containing Images/PDFs:")
         self.label_dir.pack(pady=5)
 
         self.dir_frame = ttk.Frame(self.master)
@@ -134,13 +157,13 @@ class ImageTextExtractorGUI:
             messagebox.showerror("Error", "Please select a directory.")
             return
 
-        results = process_images_in_directory(directory, lang)
+        results = process_files_in_directory(directory, lang)
         self.text_result.delete('1.0', tk.END)
         if results:
             for filename, text in results.items():
                 self.text_result.insert(tk.END, f"Filename: {filename}\n\nExtracted text:\n{text}\n\n{'='*50}\n\n")
         else:
-            self.text_result.insert(tk.END, "No text was extracted from any images in the specified directory.")
+            self.text_result.insert(tk.END, "No text was extracted from any files in the specified directory.")
 
 def main():
     if not check_tesseract_installed():
